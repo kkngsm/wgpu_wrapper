@@ -3,6 +3,7 @@
         "bytemuck",
         "multisample",
         "multiview",
+        "rustfmt",
         "Vulkan",
         "webgl",
         "wgpu",
