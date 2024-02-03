@@ -1,0 +1,12 @@
+{
+    "cSpell.words": [
+        "bytemuck",
+        "multisample",
+        "multiview",
+        "Vulkan",
+        "webgl",
+        "wgpu",
+        "wgsl",
+        "winit"
+    ]
+}
