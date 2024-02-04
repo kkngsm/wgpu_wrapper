@@ -1,8 +1,11 @@
-use wgpu::{util::DeviceExt, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline};
+use wgpu::{RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline};
 // lib.rs
 use winit::window::Window;
 
-use crate::vertex::{Vertex, INDICES};
+use crate::{
+    buffers::Buffers,
+    vertex::{Vertex, INDICES},
+};
 
 pub struct State<'window> {
     // Surface は Window よりも長い LifeTime を持たなければならない
@@ -13,6 +16,8 @@ pub struct State<'window> {
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: RenderPipeline,
     window: &'window Window,
+
+    buffers: Buffers,
 }
 
 impl<'window> State<'window> {
@@ -63,10 +68,20 @@ impl<'window> State<'window> {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
+        let buffers = Buffers::new(&device);
+        let bind_group_and_layout = buffers
+            .bind_groups
+            .iter()
+            .map(|bind_group| bind_group.group_and_layout(&device))
+            .collect::<Vec<_>>();
+        let (bind_group_layouts, bind_group): (Vec<_>, Vec<_>) = bind_group_and_layout
+            .iter()
+            .map(|(group, layout)| (group, layout))
+            .unzip();
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],   // バッファ、テクスチャなどを渡す
+                bind_group_layouts: &bind_group_layouts,
                 push_constant_ranges: &[], // push定数 変換行列などを渡す
             });
 
@@ -110,6 +125,7 @@ impl<'window> State<'window> {
             size,
             render_pipeline,
             window,
+            buffers,
         }
     }
 
@@ -150,23 +166,6 @@ impl<'window> State<'window> {
                 label: Some("Render Encoder"),
             });
 
-        // 頂点用バッファーの定義
-        let vertex_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(crate::vertex::VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-        // Index
-        let index_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(INDICES),
-                usage: wgpu::BufferUsages::INDEX,
-            });
         {
             // encoderを借用しているため、ライフタイムを制限する
             let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -185,8 +184,11 @@ impl<'window> State<'window> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_vertex_buffer(0, self.buffers.vertex.buffer.slice(..));
+            render_pass.set_index_buffer(
+                self.buffers.index.buffer.slice(..),
+                self.buffers.index.format,
+            );
             render_pass.draw_indexed(0..(INDICES.len() as u32), 0, 0..1); // 2.
         }
 
